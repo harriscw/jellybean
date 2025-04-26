@@ -10,6 +10,7 @@
 library(shiny)
 library(dplyr)
 library(ggplot2)
+library(DT)
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -17,10 +18,10 @@ ui <- fluidPage(
   textInput("name", label = "Name", value = ""),
   numericInput("guess", label = "Guess", value = NA),
   submitButton("Submit Guess", icon("refresh")),
-  checkboxInput("exclude", label="Exclude Outliers", value = FALSE, width = NULL),
+  checkboxInput("exclude", label="Exclude Outliers (Hit 'Submit Guess')", value = TRUE, width = NULL),
   tabsetPanel(
     tabPanel("Plot",plotOutput("plot")),
-    tabPanel("Data",verbatimTextOutput("data")),
+    tabPanel("Data",DTOutput("data")),
   )
 
 )
@@ -48,7 +49,9 @@ server <- function(input, output) {
       ## Read in result
       
       data=read.csv("log.csv",header = TRUE) %>% 
-        filter(!is.na(guess))
+        filter(!is.na(guess)) %>% 
+        mutate(absdiff=abs(1644-guess)) %>% 
+        arrange(absdiff)
       
       if(input$exclude){
         data=data %>% filter(guess<(quantile(data$guess,.75)+1.5*IQR(data$guess)) & guess>(quantile(data$guess,.25)-1.5*IQR(data$guess)))
@@ -58,18 +61,24 @@ server <- function(input, output) {
       
       })
     
-    output$data=renderPrint({data()})
+    output$data=renderDT({data()})
     
     output$plot=renderPlot({
       
       ggplot(data(), aes(x=guess)) +
         geom_histogram(color="black", 
                        fill="steelblue",
-                       bins=nclass.Sturges(data()$guess)) +
-        geom_vline(aes(xintercept=mean(guess,na.rm=TRUE)),
+                       bins=20) +
+        geom_vline(aes(xintercept=median(guess,na.rm=TRUE)),
                    color="blue", 
                    linetype="dashed", 
                    size=1) +
+        geom_vline(aes(xintercept=1644),
+                   color="red", 
+                   linetype="solid", 
+                   size=1) +
+        annotate("text", x = median(data()$guess,na.rm=TRUE), y = 25, label = "Median") +
+        annotate("text", x = 1644, y = 20, label = "True Value: 1644") +
         # geom_histogram(aes(y=..density..), colour="black", fill="white")+
         geom_density(alpha=.2, fill="#FF6666") +
         ylab("People Who Made that Guess") +
